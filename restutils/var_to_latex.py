@@ -17,12 +17,10 @@ s = sympy.var('s')
 sympy_profile = {'mainvar' : s, \
                  'mat_str' : 'bmatrix', \
                  'mat_delim' : None, \
-                 #'inline' : None, \
                  'mode' : 'plain', \
                  'descending' : True,
                  'inline':None,
                  }
-                 
 
 def isNum(item):
     """Check to see if an item is of some numeric data type."""
@@ -32,7 +30,6 @@ def isNum(item):
             return True
     return False
 
-
 def AbsEpsilonCheck(val, eps=1e-12):
     if not isNum(val):
         return val
@@ -41,12 +38,8 @@ def AbsEpsilonCheck(val, eps=1e-12):
     else:
         return val
 
-
 def ComplexNumToStr(val, eps=1e-12, fmt='%0.4g', polar=False, \
                     debug=0):
-    #Note that this also becomes the default class for all elements of
-    #arrays, so the possibility of those elements being sympy
-    #expressions or something exists.
     if debug:
         print('In ComplexNumToStr, val='+str(val))
         print('type(val)=%s' % type(val))
@@ -57,7 +50,7 @@ def ComplexNumToStr(val, eps=1e-12, fmt='%0.4g', polar=False, \
         return sympy_out
     elif type(val) == type(decimal.Decimal()):
         return str(val)
-    val = AbsEpsilonCheck(val)#this zeros out any vals that have very small absolute values
+    val = AbsEpsilonCheck(val)
     test = bool(isinstance(val, complex))
     if isinstance(val, complex):
         realstr = ''
@@ -82,15 +75,11 @@ def ComplexNumToStr(val, eps=1e-12, fmt='%0.4g', polar=False, \
             return outstr
     else:
         return fmt % val
-            
-    
-
 
 def RowToLatex(rowin, fmt='%0.4g', eps=1e-12):
     if hasattr(rowin,'ToLatex'):
         return rowin.ToLatex(eps=eps, fmt=fmt)
     elif isscalar(rowin):
-        #return fmt % rowin
         return ComplexNumToStr(rowin, eps=eps, fmt=fmt)
     elif is_sympy(rowin):
         return sympy.latex(rowin, profile=sympy_profile)
@@ -103,7 +92,6 @@ def RowToLatex(rowin, fmt='%0.4g', eps=1e-12):
         strlist =  [ComplexNumToStr(item, eps=eps, fmt=fmt) for item in rowin]
     return ' & '.join(strlist)
 
-
 def IsOneD(arrayin):
     """Check is arrayin is a one dimensional array (i.e. a vector)."""
     if isinstance(array, ndarray):
@@ -111,13 +99,11 @@ def IsOneD(arrayin):
             return True
     return False
 
-
 def IsLongArray(arrayin, thresh=10):
     if IsOneD(arrayin):
         if arrayin.shape[0] > thresh:
             return True
     return False
-
 
 def ShortOneDArrayToLatex(arrayin, mylhs, fmt='%0.4g'):
     curstr = mylhs +' = '
@@ -127,7 +113,6 @@ def ShortOneDArrayToLatex(arrayin, mylhs, fmt='%0.4g'):
     outlist.extend(_ArrayToLaTex(arrayin, fmt=fmt))
     outlist.append('\\end{array} \\right]')
     return outlist, 'equation'
-
 
 def OneDArrayToLatex(arrayin, mylhs, fmt='%0.4g', maxelem=10, wrap=5):
     """Attempt to intelligently auto-output one dimensional arrays,
@@ -159,15 +144,8 @@ def OneDArrayToLatex(arrayin, mylhs, fmt='%0.4g', maxelem=10, wrap=5):
         outlist.append(end2)
         return outlist, 'eqnarray'
 
-
 def ArrayToLaTex(arrayin, mylhs, fmt='%0.4g', ams=True, \
                  matstr='bmatrix', eps=1e-12):#matstr='smallmatrix'
-    ########
-    # Need to handle large arrays
-    # intelligently.
-    ########
-    #if mylhs == 'vec_r':
-    #    Pdb().set_trace()
     test = IsOneD(arrayin)
     if hasattr(arrayin, 'toarray'):
         arrayin = arrayin.toarray()
@@ -194,7 +172,6 @@ def ArrayToLaTex(arrayin, mylhs, fmt='%0.4g', ams=True, \
         outlist = '\n'.join(outlist)
         return outlist, 'equation'
 
-
 def _ArrayToLaTex(arrayin, fmt='%0.4g'):
         outlist = []
         first = 1
@@ -209,7 +186,6 @@ def _ArrayToLaTex(arrayin, fmt='%0.4g'):
                 outlist.append('\\\\')
             outlist.append(currow)
         return outlist
-
 
 def NumToLatex(ent,fmt='%0.5g',eps=1e-20, printeps=False, polar=True):
     """The polar option right now outputs rectangular and polar.  If
@@ -230,29 +206,8 @@ def NumToLatex(ent,fmt='%0.5g',eps=1e-20, printeps=False, polar=True):
         else:
             return '0'
     return ComplexNumToStr(ent, fmt=fmt, polar=polar)
-##     realstr=''
-##     imagstr=''
-##     rpart=real(ent)
-##     ipart=imag(ent)
-##     if type(fmt)==tuple or type(fmt)==list:
-##         rfmt=fmt[0]
-##         ifmt=fmt[1]
-##     else:
-##         rfmt=fmt
-##         ifmt=fmt
-##     if abs(rpart)>eps and rpart!=0:
-##         realstr=rfmt%rpart
-##     if realstr:#there needs to be a sign character on the imag even if it's positive
-##         if '+' not in ifmt:
-##             ifmt=ifmt[0]+'+'+ifmt[1:]
-##     if abs(ipart)>eps and ipart!=0:
-##         imagstr=ifmt%ipart+'j'#'$\\jmath$'
-##     return realstr+imagstr
 
 def is_sympy(myvar):
-##     typestr = str(type(myvar))
-##     ind = typestr.find('sympy.')
-##     out = bool( ind >- 1 )
     out = isinstance(myvar, sympy.core.basic.Basic)
     return out
 
@@ -292,39 +247,29 @@ def VariableToLatex(myvar, mylhs, ams=True, matstr='bmatrix', \
             env = 'equation'
         if strout.find('=') > -1:
             rhs = strout.split('=')[1]
-            #outlist = [strout]
         else:
             rhs = strout
             outlist = [mylhs +' = '+strout]
     elif type(myvar) == type(decimal.Decimal()):
         rhs = str(myvar)
-        #outlist = [mylhs+' = '+str(myvar)]
         env = 'equation'
     elif type(myvar) == dict:
         rhs = str(myvar)
-        #outlist = [mylhs +' = '+str(myvar)]
         env = 'equation'
     elif isinstance(myvar, poly1d):
         rhs, env = ArrayToLaTex(myvar.coeffs, mylhs, ams=ams)
-        
     elif isscalar(myvar):
         rhs = NumToLatex(myvar,fmt=fmt)
-        #outlist = [mylhs +' = '+NumToLatex(myvar,fmt=fmt)]
-        env = 'equation'#need a number to latex convert that handles nice formatting
+        env = 'equation'
     elif is_sympy(myvar):
         rhs = sympy.latex(myvar, profile=sympy_profile)
-        #outlist = [mylhs +' = '+sympy.latex(myvar, profile=sympy_profile)]
         env = 'equation'
     elif is_quantity(myvar):
-        #qstr = str(myvar).replace(' ','\\;')
         if markup.config.use_unicode:
             dims = myvar.dimensionality.unicode
         else:
             dims = myvar.dimensionality.string
         mag = fmt%myvar.magnitude
-        #out = mylhs+' = '+mag+r'\;'+unicode(dims,"utf-8")
-        #outlist = [mylhs+'='+unicode(qstr,"utf-8")]
-        #outlist = [out]
         env = 'equation'
         dims = unicode(dims,"utf-8")
         if dims.find('dimensionless') > -1:
@@ -340,3 +285,22 @@ def VariableToLatex(myvar, mylhs, ams=True, matstr='bmatrix', \
         outlist = replacelist.Replace(outlist)
     return outlist, env
 
+def py2latex(content,fmt='%0.4f'):
+    '''Turn a line of python code into a LaTeX string.'''
+    for n,line in enumerate(content):
+        if line.find('='): curlhs,currhs = line.split('-')
+        else: curlhs,currhs = '',line
+        try: exec line in sys.modules['__main__'].py_directive_namespace
+        except:
+            for i,l in enumerate(content):
+                print '%s: %s'%(i+1,l)
+            traceback.print_exc(file=sys.stdout)
+            sys.exit(0)
+        curvar = eval(currhs,sys.modules['__main__'].py_directive_namespace)
+        curlatex = VariableToLatex(curvar,curlhs,fmt=fmt)[0][0]
+        if n == 0: latex=curlatex
+        else:
+            latex+='\\\\'
+            latex+=curlatex
+        if n==len(content)-1 and len(content)>1: latex+='\\\\'
+    return latex

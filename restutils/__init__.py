@@ -1,64 +1,29 @@
-#!/usr/bin/env python
+#
+# restutils
+# =========
+# 
+"""
+Restutils is a set of add-ins to the standard docutils package.  
+"""
 
-try:
-    import locale
-    locale.setlocale(locale.LC_ALL, '')
-except:
-    pass
+import sys,traceback,pygments
 
-from docutils.parsers import rst
 from docutils import nodes
-from docutils.core import publish_cmdline, default_description
-from docutils.parsers.rst.roles import register_canonical_role
 from docutils.writers.latex2e import Writer as Latex2eWriter
 from docutils.writers.latex2e import LaTeXTranslator
-from docutils.parsers.rst import directives
-from var_to_latex import VariableToLatex
-#!from pytexutils import lhs
-import sys,traceback
-#from pygments_code_block_directive import *
-import pygments
-from pygments.lexers import get_lexer_by_name
-from pygments.formatters import LatexFormatter
+from docutils.parsers.rst.roles import register_canonical_role
+from docutils.parsers.rst import directives, Directive
 from docutils.parsers.rst.directives.images import Figure
 
-def filterlhs(lhsin):
-    """I had some problems with just grabbing everything to the left
-    of the equals sign with Maxima output.  Sometimes there are very
-    complicated expressions over there and I just want simple
-    variables.  If lhsin is complicated, return an empty string."""
-    badlist = ['\\left','\\right','\\frac','\\displaystyle','\\begin','\\end','\\,']
-    for item in badlist:
-        if item in lhsin:
-            return ''
-    if floatre.match(lhsin.strip()):#we aren't going to replace floating point or integer lhs's
-        return ''
-    return lhsin
+from pygments.lexers import get_lexer_by_name
+from pygments.formatters import LatexFormatter
 
-    
-def lhs(line):
-    """Find the left hand side of a line with an equals sign."""
-    lineout = line.strip()
-    ind = lineout.find('=')
-    if ind==-1:
-        return ''
-    myout = lineout[0:ind]
-    myout = myout.strip()
-    myout = filterlhs(myout)
-    return myout
-
-
-def parse_py_line(line):
-    if line.find('=') != -1:
-        l,r = line.split('=')
-        return l,r
-    else:
-        return '',line
-
+from var_to_latex import VariableToLatex
 
 def py2latex(content,fmt='%0.4f'):
     for n,line in enumerate(content):
-        curlhs,currhs = parse_py_line(line)
+        if line.find("="): curlhs, currhs = line.split("=")
+        else: curlhs, currhs = '',line
         try:
             exec line in sys.modules['__main__'].py_directive_namespace
         except:
@@ -74,7 +39,6 @@ def py2latex(content,fmt='%0.4f'):
                 print '%s: %s'%(i+1,l)
             traceback.print_exc(file=sys.stdout)
             sys.exit(0)
-            
         if n == 0:
             latex=curlatex
         else:
@@ -84,17 +48,22 @@ def py2latex(content,fmt='%0.4f'):
                 latex+='\\\\'
     return latex
 
+#========================================
+# Nodes
+#========================================
 
-# Executed py directives
+class latex_math(nodes.Element):
+    tagname = '#latex-math'
+    def __init__(self, rawsource, latex):
+        nodes.Element.__init__(self, rawsource)
+        self.latex = latex
 
-# Define py node:
 class py(nodes.Element):
     tagname = '#py'
     def __init__(self, rawsource, latex):
         nodes.Element.__init__(self, rawsource)
         self.latex = latex
 
-# Define pyno node:
 class pyno(nodes.Element):
     tagname = '#pyno'
     def __init__(self, rawsource, latex):
@@ -107,8 +76,27 @@ class py_echo_area(nodes.Element):
         nodes.Element.__init__(self, rawsource)
         self.latex = latex
 
+class code_block(nodes.Element):
+    tagname = '#code_block'
+    def __init__(self, rawsource, latex,language,formatter):
+        nodes.Element.__init__(self, rawsource)
+        self.latex = latex
+        self.language = language
+        self.formatter = formatter
 
-# Register role:
+class jqfigure(nodes.General, nodes.Element):pass
+
+#========================================
+# Roles
+#========================================
+
+def latex_math_role(role, rawtext, text, lineno, inliner,
+                    options={'label':None}, content=[]):
+    i = rawtext.find('`')
+    latex = rawtext[i+1:-1]
+    node = latex_math(rawtext, latex)
+    return [node], []
+
 def py_role(role, rawtext, text, lineno, inliner,
                     options={}, content=[]):
     if not hasattr(sys.modules['__main__'],'py_directive_namespace'):
@@ -128,13 +116,8 @@ def py_role(role, rawtext, text, lineno, inliner,
     node = py(rawtext, latex)
     return [node], []
 
-class code_block(nodes.Element):
-    tagname = '#code_block'
-    def __init__(self, rawsource, latex,language,formatter):
-        nodes.Element.__init__(self, rawsource)
-        self.latex = latex
-        self.language = language
-        self.formatter = formatter
+py_role.options = {'class': None,'fmt': directives.unchanged}
+py_role.options = {'class': None,'language': directives.unchanged}
         
 def code_block_role(role,rawtext,text,lineno,inliner,options={},content=[]):
     latex = text#'\\lstinline{%s}'%text
@@ -145,56 +128,23 @@ def code_block_role(role,rawtext,text,lineno,inliner,options={},content=[]):
     formatter = 'listings'
     node = code_block(rawtext,latex,language,formatter)
     return [node],[]
-    
 
-class code_block_directive(rst.Directive):
+#========================================
+# Directives
+#========================================
+
+class latex_math_directive(Directive):
     has_content = True
-
-    required_arguments = 1
-    options_spec = {
-        'numbering':directives.unchanged,
-        'formater':directives.unchanged,
-        }
-
-
-    def run(self):
-        formatter = self.state.document.settings.code_block_formatter
-        if self.options.has_key('formatter'):
-            echo = self.options['formatter']
-        else:
-            formatter = 'listings'
-        language = self.arguments[0]
-        code = ''
-        for line in self.content:
-            code+='%s\n'%line
-        if formatter == 'pygments':
-            lexer = get_lexer_by_name(language)
-            latex_tokens = pygments.lex(code, lexer)
-            formatter = LatexFormatter()
-            latex = pygments.format(latex_tokens,formatter)
-        elif formatter == 'listings':
-            latex = code
-        node = code_block(self.block_text,latex,language,formatter)
+    def run(self): 
+        latex = ''.join(self.content)
+        node = latex_math(self.block_text, latex)
         return [node]
 
-        
-
-class py_directive(rst.Directive):
+class py_directive(Directive):
     has_content = True
-    # echo_values = ('verbatim','none')
-    # format_values = ('%0.3f','%0.9f')
-    
-    # def format(argument):
-    #     return directives.choice(argument, py_directive.format_values)
-
-    # def echo(argument):
-    #     return directives.choice(argument, py_directive.echo_values)
-
     option_spec = {'echo': directives.unchanged,
                    'fmt': directives.unchanged,
                    }
-    
-
 
     def run(self):
         echo = self.state.document.settings.py_echo
@@ -222,9 +172,8 @@ class py_directive(rst.Directive):
         else:
             return [py_node]
 
-class pyno_directive(rst.Directive):
+class pyno_directive(Directive):
     has_content = True
-
 
     option_spec = {'echo': directives.unchanged,
                    'fmt': directives.unchanged,
@@ -266,9 +215,35 @@ class pyno_directive(rst.Directive):
         py_node = pyno(self.block_text,latex)
         return [echo_code,py_node]
 
+class code_block_directive(Directive):
+    has_content = True
 
-class jqfigure(nodes.General, nodes.Element):pass
+    required_arguments = 1
+    options_spec = {
+        'numbering':directives.unchanged,
+        'formater':directives.unchanged,
+        }
 
+    def run(self):
+        formatter = self.state.document.settings.code_block_formatter
+        if self.options.has_key('formatter'):
+            echo = self.options['formatter']
+        else:
+            formatter = 'listings'
+        language = self.arguments[0]
+        code = ''
+        for line in self.content:
+            code+='%s\n'%line
+        if formatter == 'pygments':
+            lexer = get_lexer_by_name(language)
+            latex_tokens = pygments.lex(code, lexer)
+            formatter = LatexFormatter()
+            latex = pygments.format(latex_tokens,formatter)
+        elif formatter == 'listings':
+            latex = code
+        node = code_block(self.block_text,latex,language,formatter)
+        return [node]
+        
 class jqfigure_directive(Figure):
 
     option_spec = Figure.option_spec.copy()
@@ -283,6 +258,22 @@ class jqfigure_directive(Figure):
         jqfigure_node['placement'] = placement
         return [jqfigure_node]
 
+#========================================
+# Visit/Departs
+#========================================
+
+def visit_latex_math(self, node):
+    inline = isinstance(node.parent, nodes.TextElement)
+    if inline:
+        self.body.append('$%s$' % node.latex)
+    else:
+        self.body.extend(['\\begin{equation*}\\begin{split}',
+                          node.latex,
+                          '\\end{split}\\end{equation*}'])
+        
+def depart_latex_math(self, node):
+    pass
+    
 def visit_py(self,node):
     inline = isinstance(node.parent, nodes.TextElement)
     attrs = node.attributes
@@ -295,16 +286,16 @@ def visit_py(self,node):
 def depart_py(self,node):
     pass
 
-def visit_py_echo_area(self,node):
-    self.body.extend(['\n\n\\begin{lstlisting}[language={python}]\n',node.latex,'\n\\end{lstlisting}\n'])
-
-def depart_py_echo_area(self,node):
-    pass
-
 def visit_pyno(self,node):
     pass
 
 def depart_pyno(self,node):
+    pass
+
+def visit_py_echo_area(self,node):
+    self.body.extend(['\n\n\\begin{lstlisting}[language={python}]\n',node.latex,'\n\\end{lstlisting}\n'])
+
+def depart_py_echo_area(self,node):
     pass
 
 def visit_code_block(self,node):
@@ -327,7 +318,6 @@ def visit_code_block(self,node):
 def depart_code_block(self,node):
     pass
 
-
 def visit_jqfigure(self,node):
     pass
 
@@ -345,46 +335,9 @@ def depart_jqfigure(self,node):
             self.out[-j] = cur+placement
             break
 
-# Latex Math Stuff
-
-# Define LaTeX math node:
-class latex_math(nodes.Element):
-    tagname = '#latex-math'
-    def __init__(self, rawsource, latex):
-        nodes.Element.__init__(self, rawsource)
-        self.latex = latex
-
-# Register role:
-def latex_math_role(role, rawtext, text, lineno, inliner,
-                    options={'label':None}, content=[]):
-    i = rawtext.find('`')
-    latex = rawtext[i+1:-1]
-    node = latex_math(rawtext, latex)
-    return [node], []
-
-class latex_math_directive(rst.Directive):
-    has_content = True
-    def run(self): 
-        latex = ''.join(self.content)
-        node = latex_math(self.block_text, latex)
-        return [node]
-# Add visit/depart methods to HTML-Translator:
-def visit_latex_math(self, node):
-    inline = isinstance(node.parent, nodes.TextElement)
-    if inline:
-        self.body.append('$%s$' % node.latex)
-    else:
-        self.body.extend(['\\begin{equation}\\begin{split}',
-                          node.latex,
-                          '\\end{split}\\end{equation}'])
-        
-def depart_latex_math(self, node):
-    pass
-    
-
-# Register everything and add to Translator
-py_role.options = {'class': None,'fmt': directives.unchanged}
-py_role.options = {'class': None,'language': directives.unchanged}
+#========================================
+# Register roles and directives
+#========================================
 
 register_canonical_role('latex-math', latex_math_role)
 register_canonical_role('py', py_role)
@@ -396,6 +349,9 @@ directives.register_directive('pyno', pyno_directive)
 directives.register_directive('code-block', code_block_directive)
 directives.register_directive('jqfigure', jqfigure_directive)
 
+#========================================
+# Add methods to LaTeXTranslator
+#========================================
 
 LaTeXTranslator.visit_latex_math = visit_latex_math
 LaTeXTranslator.depart_latex_math = depart_latex_math
@@ -410,8 +366,10 @@ LaTeXTranslator.depart_code_block = depart_code_block
 LaTeXTranslator.visit_jqfigure = visit_jqfigure
 LaTeXTranslator.depart_jqfigure = depart_jqfigure
 
+#========================================
+# Modify commandline 
+#========================================
 
-# Publish the commandline
 Latex2eWriter.settings_spec = (Latex2eWriter.settings_spec[0],\
                                Latex2eWriter.settings_spec[1],\
                                Latex2eWriter.settings_spec[2] + \
@@ -428,16 +386,3 @@ Latex2eWriter.settings_spec = (Latex2eWriter.settings_spec[0],\
                                  ['--jqfigure-placement'],\
                                  {'default':'tbp!'})
                                 ))
-
-description = ('Generates LaTeX documents from standalone reStructuredText '
-               'sources.  ' + default_description)
-
-publish_cmdline(writer_name='latex', description=description)
-
-
-
-
-
-
-
-    
