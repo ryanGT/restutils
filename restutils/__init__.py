@@ -18,7 +18,9 @@ from docutils.parsers.rst.directives.images import Figure
 from pygments.lexers import get_lexer_by_name
 from pygments.formatters import LatexFormatter
 
-from var_to_latex import VariableToLatex
+from sympy.printing import latex as LaTeX
+from sympy import Matrix
+from numpy import array
 
 def py2latex(content,fmt='%0.4f'):
     for n,line in enumerate(content):
@@ -33,12 +35,18 @@ def py2latex(content,fmt='%0.4f'):
             sys.exit(0)
         curvar = eval(currhs,sys.modules['__main__'].py_directive_namespace)
         try:
-            curlatex = VariableToLatex(curvar,curlhs,fmt=fmt)[0][0]
+            settings = {'mat_str':'bmatrix','mat_delim':None}
+            if type(curvar) == type(array([1])):
+                curvar = Matrix(curvar)
+            curlatex = LaTeX(curvar,**settings)
         except:
             for i,l in enumerate(content):
                 print '%s: %s'%(i+1,l)
             traceback.print_exc(file=sys.stdout)
             sys.exit(0)
+        if curlhs != '':
+            curlatex = unicode(curlatex,"utf-8").replace('dimensionless','')
+            curlatex = '%s = %s'%(curlhs,curlatex)
         if n == 0:
             latex=curlatex
         else:
