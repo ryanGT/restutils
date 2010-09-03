@@ -6,7 +6,7 @@
 Restutils is a set of add-ins to the standard docutils package.  
 """
 
-import sys,traceback,pygments
+import sys,traceback,pygments,pdb
 
 from docutils import nodes
 from docutils.writers.latex2e import Writer as Latex2eWriter
@@ -39,7 +39,33 @@ class LatexPrinter(SympyLatexPrinter):
         return out_str % r"\\".join(lines)
 
 
-def py2latex(content,prec=4,fmt="%0.4f"):
+def load_replacement_list(replacement_file):
+    f = open(replacement_file, 'rb')
+    lines = f.readlines()
+    f.close()
+    find_list = []
+    replace_list = []
+    for line in lines:
+        f, r = line.split('&',1)
+        find_list.append(f.strip())
+        replace_list.append(r.strip())
+    return find_list, replace_list
+
+
+def _replace_latex(latex, find_list, replace_list):
+    latex_out = latex
+    for find_str, replace_str in zip(find_list, replace_list):
+        latex_out = latex_out.replace(find_str, replace_str)
+    return latex_out
+
+
+def replace_latex(latex, replacement_file):
+    find_list, replace_list = load_replacement_list(replacement_file)
+    latex_out = _replace_latex(latex, find_list, replace_list)
+    return latex_out
+
+
+def py2latex(content,prec=4,fmt="%0.4f",replacement_file=None):
     for n,line in enumerate(content):
         if line.find("="): curlhs, currhs = line.split("=")
         else: curlhs, currhs = '',line
@@ -70,6 +96,8 @@ def py2latex(content,prec=4,fmt="%0.4f"):
             latex+=curlatex
         if n==len(content)-1 and len(content)>1:
                 latex+='\\\\'
+    if replacement_file:
+        latex = replace_latex(latex, replacement_file)#probably bad to load the file many times
     return latex
 
 #========================================
@@ -188,7 +216,10 @@ class py_directive(Directive):
                     echo_code_latex += '\n'
         elif echo == 'none':
             echo_code_latex = ''
-        latex = py2latex(self.content,fmt=fmt)
+        replace_path = ''
+        if self.state.document.settings.replacement_file:
+            replace_path = self.state.document.settings.replacement_file
+        latex = py2latex(self.content,fmt=fmt,replacement_file=replace_path)
         py_node = py(self.block_text,latex)                
         if echo != 'none':
             echo_code = py_echo_area(self.block_text,echo_code_latex)
@@ -408,5 +439,9 @@ Latex2eWriter.settings_spec = (Latex2eWriter.settings_spec[0],\
                                  {'default':'python'}),
                                 ('Specify formatter for code blocks. Default is [tbp!].',\
                                  ['--jqfigure-placement'],\
-                                 {'default':'tbp!'})
-                                ))
+                                 {'default':'tbp!'}),\
+                                ('Specify filepath for search and replace of LaTeX output.',\
+                                 ['--replacement-file'],\
+                                 {'default':''}),
+                                )
+                               )
