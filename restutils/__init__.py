@@ -18,11 +18,28 @@ from docutils.parsers.rst.directives.images import Figure
 from pygments.lexers import get_lexer_by_name
 from pygments.formatters import LatexFormatter
 
-from sympy.printing import latex as LaTeX
-from sympy import Matrix
-from numpy import array
+from sympy import N
+from sympy.printing.latex import LatexPrinter as SympyLatexPrinter
 
-def py2latex(content,fmt='%0.4f'):
+class LatexPrinter(SympyLatexPrinter):
+    def _print_ndarray(self, expr):
+        lines = []
+
+        # copied from _print_Matrix ... it uses expr.rows and hasattr("rows",ndarray)==False
+        for line in range(len(expr)):
+            lines.append(" & ".join([ self._print(i) for i in expr[line,:] ]))
+
+        out_str = r'\begin{%MATSTR%}%s\end{%MATSTR%}'
+        out_str = out_str.replace('%MATSTR%', self._settings['mat_str'])
+        if self._settings['mat_delim']:
+            left_delim = self._settings['mat_delim']
+            right_delim = self._delim_dict[left_delim]
+            out_str = r'\left' + left_delim + out_str + \
+                      r'\right' + right_delim
+        return out_str % r"\\".join(lines)
+
+
+def py2latex(content,prec=4,fmt="%0.4f"):
     for n,line in enumerate(content):
         if line.find("="): curlhs, currhs = line.split("=")
         else: curlhs, currhs = '',line
@@ -36,14 +53,12 @@ def py2latex(content,fmt='%0.4f'):
         curvar = eval(currhs,sys.modules['__main__'].py_directive_namespace)
         try:
             settings = {'mat_str':'bmatrix','mat_delim':None}
-            if type(curvar) == type(array([1])):
-                curvar = Matrix(curvar)
-            curlatex = LaTeX(curvar,**settings)
+            curlatex = LatexPrinter(settings).doprint(curvar)
         except:
             for i,l in enumerate(content):
                 print '%s: %s'%(i+1,l)
             traceback.print_exc(file=sys.stdout)
-            sys.exit(0)
+            sys.exit(1)
         if curlhs != '':
             curlatex = unicode(curlatex,"utf-8").replace('dimensionless','')
             curlatex = '%s = %s'%(curlhs,curlatex)
