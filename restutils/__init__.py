@@ -35,7 +35,8 @@ def py2latex(content,fmt='%0.4f'):
             sys.exit(0)
         curvar = eval(currhs,sys.modules['__main__'].py_directive_namespace)
         try:
-            settings = {'mat_str':'bmatrix','mat_delim':None}
+            settings = {'mat_str':'bmatrix','mat_delim':None, \
+                        'wrap':'none','inline':False}
             if type(curvar) == type(array([1])):
                 curvar = Matrix(curvar)
             curlatex = LaTeX(curvar,**settings)
