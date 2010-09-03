@@ -21,22 +21,14 @@ from pygments.formatters import LatexFormatter
 from sympy import N
 from sympy.printing.latex import LatexPrinter as SympyLatexPrinter
 
+from var_to_latex import ArrayToLaTex
+
 class LatexPrinter(SympyLatexPrinter):
     def _print_ndarray(self, expr):
-        lines = []
-
-        # copied from _print_Matrix ... it uses expr.rows and hasattr("rows",ndarray)==False
-        for line in range(len(expr)):
-            lines.append(" & ".join([ self._print(i) for i in expr[line,:] ]))
-
-        out_str = r'\begin{%MATSTR%}%s\end{%MATSTR%}'
-        out_str = out_str.replace('%MATSTR%', self._settings['mat_str'])
-        if self._settings['mat_delim']:
-            left_delim = self._settings['mat_delim']
-            right_delim = self._delim_dict[left_delim]
-            out_str = r'\left' + left_delim + out_str + \
-                      r'\right' + right_delim
-        return out_str % r"\\".join(lines)
+        out_str = ArrayToLaTex(expr,'')[0]
+        if type(out_str) == list:
+            out_str = '\n'.join(out_str)
+        return out_str 
 
 
 def load_replacement_list(replacement_file):
@@ -196,6 +188,7 @@ class py_directive(Directive):
     has_content = True
     option_spec = {'echo': directives.unchanged,
                    'fmt': directives.unchanged,
+                   'label': directives.unchanged,
                    }
 
     def run(self):
@@ -207,6 +200,10 @@ class py_directive(Directive):
             echo = self.options['echo']
         if self.options.has_key('fmt'):
             fmt = self.options['fmt']
+        if self.options.has_key('label'):
+            label = self.options['label']
+        else:
+            label = None
         echo_code_latex = ''
         if echo == 'verbatim':
             echo_code_latex = ""
@@ -221,6 +218,8 @@ class py_directive(Directive):
             replace_path = self.state.document.settings.replacement_file
         latex = py2latex(self.content,fmt=fmt,replacement_file=replace_path)
         py_node = py(self.block_text,latex)                
+        if label:
+            py_node.label = label
         if echo != 'none':
             echo_code = py_echo_area(self.block_text,echo_code_latex)
             return [echo_code,py_node]
@@ -318,6 +317,7 @@ class jqfigure_directive(Figure):
 #========================================
 
 def visit_latex_math(self, node):
+    self.requirements['math'] = r'\usepackage{amsmath}'
     inline = isinstance(node.parent, nodes.TextElement)
     if inline:
         self.body.append('$%s$' % node.latex)
@@ -330,14 +330,22 @@ def depart_latex_math(self, node):
     pass
     
 def visit_py(self,node):
+    self.requirements['math'] = r'\usepackage{amsmath}'
     inline = isinstance(node.parent, nodes.TextElement)
     attrs = node.attributes
     if inline:
         self.body.append('$%s$' % node.latex)
     else:
-        self.body.extend(['\\begin{equation}\\begin{split}\n',
-                          node.latex,
-                          '\n\\end{split}\\end{equation}\n'])
+        if hasattr(node,'label') and node.label:
+            self.body.extend(['\\begin{equation}\\begin{split}\n',
+                              '\\label{%s}'%node.label,
+                              node.latex,
+                              '\n\\end{split}\\end{equation}\n'])
+        else:
+            self.body.extend(['\\begin{equation}\\begin{split}\n',
+                              node.latex,
+                              '\n\\end{split}\\end{equation}\n'])
+            
 def depart_py(self,node):
     pass
 
@@ -348,6 +356,7 @@ def depart_pyno(self,node):
     pass
 
 def visit_py_echo_area(self,node):
+    self.requirements['listings'] = r'\usepackage{listings}'
     self.body.extend(['\n\n\\begin{lstlisting}[language={python}]\n',node.latex,'\n\\end{lstlisting}\n'])
 
 def depart_py_echo_area(self,node):
@@ -357,6 +366,7 @@ def visit_code_block(self,node):
     inline = isinstance(node.parent, nodes.TextElement)
     attrs = node.attributes
     if inline:
+        self.requirements['listings'] = r'\usepackage{listings}'
         self.body.append('\\lstinline{%s}' % node.latex)
     else:
         if node.formatter == 'pygments':
@@ -365,6 +375,7 @@ def visit_code_block(self,node):
             formatter = LatexFormatter()
             latex = [pygments.format(latex_tokens,formatter)]
         elif node.formatter == 'listings':
+            self.requirements['listings'] = r'\usepackage{listings}'
             latex = ['\\begin{lstlisting}[language=%s]\n'%node.language,
                           node.latex,
                           '\n\\end{lstlisting}\n']
