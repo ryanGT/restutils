@@ -3,7 +3,7 @@
 # =========
 # 
 """
-Restutils is a set of add-ins to the standard docutils package.  
+Restutils is an extention to the standard docutils package.  
 """
 
 import sys,traceback,pygments
@@ -22,6 +22,9 @@ from sympy import N
 from sympy.printing.latex import LatexPrinter as SympyLatexPrinter
 
 from var_to_latex import ArrayToLaTex
+
+__version__="0.1"
+__version_details__=""
 
 class LatexPrinter(SympyLatexPrinter):
     def _print_ndarray(self, expr):
@@ -44,7 +47,7 @@ def py2latex(content,prec=4,fmt="%0.4f"):
             sys.exit(0)
         curvar = eval(currhs,sys.modules['__main__'].py_directive_namespace)
         try:
-            settings = {'mat_str':'bmatrix','mat_delim':None}
+            settings = {'mat_str':'bmatrix','mat_delim':None,'inline':None}
             curlatex = LatexPrinter(settings).doprint(curvar)
         except:
             for i,l in enumerate(content):
@@ -150,9 +153,19 @@ def code_block_role(role,rawtext,text,lineno,inliner,options={},content=[]):
 
 class latex_math_directive(Directive):
     has_content = True
+    option_spec = {
+        'numbered':directives.unchanged,
+        }
+
     def run(self): 
         latex = ''.join(self.content)
         node = latex_math(self.block_text, latex)
+        node.number_equation = self.state.document.settings.number_equations
+        if self.options.has_key('numbered'):
+            if self.options['numbered'] in ['true','True']:
+                node.number_equation = True
+            elif self.options['numbered'] in ['false','False']:
+                node.number_equation = False
         return [node]
 
 class py_directive(Directive):
@@ -160,11 +173,13 @@ class py_directive(Directive):
     option_spec = {'echo': directives.unchanged,
                    'fmt': directives.unchanged,
                    'label': directives.unchanged,
+                   'numbered':directives.unchanged,
                    }
 
     def run(self):
         echo = self.state.document.settings.py_echo
         fmt = self.state.document.settings.py_fmt
+
         if not hasattr(sys.modules['__main__'],'py_directive_namespace'):
             setattr(sys.modules['__main__'],'py_directive_namespace', {})
         if self.options.has_key('echo'):
@@ -188,6 +203,12 @@ class py_directive(Directive):
         py_node = py(self.block_text,latex)
         if label:
             py_node.label = label
+        py_node.number_equation = self.state.document.settings.number_equations
+        if self.options.has_key('numbered'):
+            if self.options['numbered'] in ['true','True']:
+                py_node.number_equation = True
+            elif self.options['numbered'] in ['false','False']:
+                py_node.number_equation = False
         if echo != 'none':
             echo_code = py_echo_area(self.block_text,echo_code_latex)
             return [echo_code,py_node]
@@ -290,9 +311,13 @@ def visit_latex_math(self, node):
     if inline:
         self.body.append('$%s$' % node.latex)
     else:
-        self.body.extend(['\\begin{equation*}\\begin{split}',
+        if node.number_equation:
+            env = 'equation'
+        else:
+            env = 'equation*'
+        self.body.extend(['\\begin{%s}\\begin{split}'%env,
                           node.latex,
-                          '\\end{split}\\end{equation*}'])
+                          '\\end{split}\\end{%s}'%env])
         
 def depart_latex_math(self, node):
     pass
@@ -304,15 +329,19 @@ def visit_py(self,node):
     if inline:
         self.body.append('$%s$' % node.latex)
     else:
+        if node.number_equation:
+            env = 'equation'
+        else:
+            env = 'equation*'
         if hasattr(node,'label') and node.label:
-            self.body.extend(['\\begin{equation}\\begin{split}\n',
+            self.body.extend(['\\begin{%s}\\begin{split}\n'%env,
                               '\\label{%s}'%node.label,
                               node.latex,
-                              '\n\\end{split}\\end{equation}\n'])
+                              '\n\\end{split}\\end{%s}\n'%env])
         else:
-            self.body.extend(['\\begin{equation}\\begin{split}\n',
+            self.body.extend(['\\begin{%s}\\begin{split}\n'%env,
                               node.latex,
-                              '\n\\end{split}\\end{equation}\n'])
+                              '\n\\end{split}\\end{%s}\n'%env])
             
 def depart_py(self,node):
     pass
@@ -418,5 +447,8 @@ Latex2eWriter.settings_spec = (Latex2eWriter.settings_spec[0],\
                                  {'default':'python'}),
                                 ('Specify formatter for code blocks. Default is [tbp!].',\
                                  ['--jqfigure-placement'],\
-                                 {'default':'tbp!'})
+                                 {'default':'tbp!'}),
+                                ('Turn on equation numbering.',\
+                                 ['--number-equations'],\
+                                 {'action': 'store_true','default':False})                                
                                 ))
