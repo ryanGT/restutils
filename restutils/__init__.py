@@ -14,6 +14,7 @@ from docutils.writers.latex2e import LaTeXTranslator
 from docutils.parsers.rst.roles import register_canonical_role
 from docutils.parsers.rst import directives, Directive
 from docutils.parsers.rst.directives.images import Figure
+from docutils.writers.latex2e import PreambleCmds
 
 from pygments.lexers import get_lexer_by_name
 from pygments.formatters import LatexFormatter
@@ -325,6 +326,7 @@ class jqfigure_directive(Figure):
     option_spec['placement'] = directives.unchanged
 
     def run(self):
+        pdb.set_trace()
         placement = self.state.document.settings.jqfigure_placement
         if self.options.has_key('placement'):
             placement = self.options['placement']
@@ -416,6 +418,83 @@ def depart_code_block(self,node):
 def visit_jqfigure(self,node):
     pass
 
+## def visit_figure(self, node):
+##     pdb.set_trace()
+##     self.requirements['float_settings'] = PreambleCmds.float_settings
+##     # ! the 'align' attribute should set "outer alignment" !
+##     # For "inner alignment" use LaTeX default alignment (similar to HTML)
+##     ## if ('align' not in node.attributes or
+##     ##     node.attributes['align'] == 'center'):
+##     ##     align = '\n\\centering'
+##     ##     align_end = ''
+##     ## else:
+##     ##     # TODO non vertical space for other alignments.
+##     ##     align = '\\begin{flush%s}' % node.attributes['align']
+##     ##     align_end = '\\end{flush%s}' % node.attributes['align']
+##     ## self.out.append( '\\begin{figure}%s\n' % align )
+##     ## self.context.append( '%s\\end{figure}\n' % align_end )
+##     self.out.append('\\begin{figure}')
+##     if node.get('ids'):
+##         self.out += ['\n'] + self.ids_to_labels(node)
+    
+def visit_image(self, node):
+    self.requirements['graphicx'] = self.graphicx_package
+    attrs = node.attributes
+    # Add image URI to dependency list, assuming that it's
+    # referring to a local file.
+    self.settings.record_dependencies.add(attrs['uri'])
+    # alignment defaults:
+    if not 'align' in attrs:
+        # Set default align of image in a figure to 'center'
+        if isinstance(node.parent, nodes.figure):
+            attrs['align'] = 'center'
+        # query 'align-*' class argument
+        for cls in node['classes']:
+            if cls.startswith('align-'):
+                attrs['align'] = cls.split('-')[1]
+    # pre- and postfix (prefix inserted in reverse order)
+    pre = []
+    post = []
+    include_graphics_options = []
+    display_style = ('block-', 'inline-')[self.is_inline(node)]
+    align_codes = {
+        # inline images: by default latex aligns the bottom.
+        'bottom': ('', ''),
+        'middle': (r'\raisebox{-0.5\height}{', '}'),
+        'top':    (r'\raisebox{-\height}{', '}'),
+        # block level images:
+        #'center': (r'\noindent\makebox[\textwidth][c]{', '}'),
+        'center': ('',''),
+        'left':   (r'\noindent{', r'\hfill}'),
+        'right':  (r'\noindent{\hfill', '}'),}
+    if 'align' in attrs:
+        try:
+            align_code = align_codes[attrs['align']]
+            pre.append(align_code[0])
+            post.append(align_code[1])
+        except KeyError:
+            pass                    # TODO: warn?
+    if 'height' in attrs:
+        include_graphics_options.append('height=%s' %
+                        self.to_latex_length(attrs['height']))
+    if 'scale' in attrs:
+        include_graphics_options.append('scale=%f' %
+                                        (attrs['scale'] / 100.0))
+    if 'width' in attrs:
+        include_graphics_options.append('width=%s' %
+                        self.to_latex_length(attrs['width']))
+    if not self.is_inline(node):
+        pre.append('\n')
+        post.append('\n')
+    pre.reverse()
+    self.out.extend(pre)
+    options = ''
+    if include_graphics_options:
+        options = '[%s]' % (','.join(include_graphics_options))
+    self.out.append('\\includegraphics%s{%s}' % (options, attrs['uri']))
+    self.out.extend(post)
+
+
 def depart_jqfigure(self,node):
     attrs = node.attributes
     placement_str = attrs['placement']
@@ -460,6 +539,8 @@ LaTeXTranslator.visit_code_block = visit_code_block
 LaTeXTranslator.depart_code_block = depart_code_block
 LaTeXTranslator.visit_jqfigure = visit_jqfigure
 LaTeXTranslator.depart_jqfigure = depart_jqfigure
+#LaTeXTranslator.visit_figure = visit_figure
+LaTeXTranslator.visit_image = visit_image
 
 #========================================
 # Modify commandline 
