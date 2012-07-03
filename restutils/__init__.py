@@ -42,9 +42,14 @@ def load_replacement_list(replacement_file):
     find_list = []
     replace_list = []
     for line in lines:
-        f, r = line.split('&',1)
-        find_list.append(f.strip())
-        replace_list.append(r.strip())
+        curline = line.strip()
+        if curline:
+            try:
+                f, r = curline.split('&',1)
+                find_list.append(f.strip())
+                replace_list.append(r.strip())
+            except ValueError:
+                print('problem with line:' + curline)
     return find_list, replace_list
 
 
@@ -54,9 +59,21 @@ def _replace_latex(latex, find_list, replace_list):
         latex_out = latex_out.replace(find_str, replace_str)
     return latex_out
 
+find0 = ['\\begin{equation*}','\\end{equation*}', \
+         '\\begin{pmatrix}','\\end{pmatrix']
 
-def replace_latex(latex, replacement_file):
-    find_list, replace_list = load_replacement_list(replacement_file)
+rep0 = ['','', \
+        '\\begin{bmatrix}','\\end{bmatrix']
+
+
+def replace_latex(latex, replacement_file=None):
+    if replacement_file:
+        find_list1, replace_list1 = load_replacement_list(replacement_file)
+        find_list = find0 + find_list1
+        replace_list = rep0 + replace_list1
+    else:
+        find_list = find0
+        replace_list = rep0
     latex_out = _replace_latex(latex, find_list, replace_list)
     return latex_out
 
@@ -92,8 +109,7 @@ def py2latex(content,prec=4,fmt="%0.4f",replacement_file=None):
             latex+=curlatex
         if n==len(content)-1 and len(content)>1:
                 latex+='\\\\'
-    if replacement_file:
-        latex = replace_latex(latex, replacement_file)#probably bad to load the file many times
+    latex = replace_latex(latex, replacement_file)#probably bad to load the file many times
     return latex
 
 #========================================
