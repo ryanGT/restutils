@@ -479,7 +479,8 @@ def visit_image(self, node):
         'middle': (r'\raisebox{-0.5\height}{', '}'),
         'top':    (r'\raisebox{-\height}{', '}'),
         # block level images:
-        'center': (r'\noindent\makebox[\textwidth][c]{', '}'),
+        #'center': (r'\noindent\makebox[\textwidth][c]{', '}'),
+        'center': (r'\centering', ''),
         #'center': ('',''),
         'left':   (r'\noindent{', r'\hfill}'),
         'right':  (r'\noindent{\hfill', '}'),}
